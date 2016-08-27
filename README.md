@@ -4,6 +4,12 @@
 
 ## Usage
 
+### Change color
 ```
 notti ffffff
+```
+
+### Lights out
+```
+notti
 ```
