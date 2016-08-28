@@ -6,10 +6,10 @@
 
 ### Change color
 ```
-notti ffffff
+$ notti ffffff
 ```
 
 ### Lights out
 ```
-notti
+$ notti
 ```
