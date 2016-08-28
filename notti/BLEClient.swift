@@ -25,7 +25,7 @@ internal class BLEClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelega
     
     // MARK: -
     
-    private let timeout = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC*10))
+    private var timeout: dispatch_time_t { return dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC*10)) }
     
     func poweredOn() -> Bool {
         if centralManager.state == .PoweredOn { return true }
