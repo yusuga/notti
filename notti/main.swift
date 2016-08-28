@@ -60,7 +60,14 @@ if verbose { print("Discoverd reciver. {\n\treciver: \(reciver)\n}") }
 let data = Color(argument: arguments.first).data
 if verbose { print("Will write data {\n\tdata: \(data)\n}") }
 
-if !client.write(notti, reciver: reciver, data: data) {
-    print("Failed to write data. {\n\t(\(data))\n}")
-    exit(#line)
+let trialCount = 3
+for i in 1...trialCount {
+    if client.write(notti, reciver: reciver, data: data) {
+        break;
+    } else if i == trialCount {
+        print("Failed to write data. {\n\t(\(data))\n}")
+        exit(#line)
+    } else {
+        if verbose { print("Retry the write data. (\(i))") }
+    }
 }
