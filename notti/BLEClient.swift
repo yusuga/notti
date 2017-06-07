@@ -11,7 +11,7 @@ import CoreBluetooth
 
 internal class BLEClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     
-    fileprivate static let nottiUUID = UUID(uuidString: "B1C06DCE-8935-4E0D-8AED-8432F2DBC73C")    
+    fileprivate static let nottiUUID = UUID(uuidString: "3587105E-2D8C-4B57-8985-BD534EB44640")
     fileprivate static let colorServiceCBUUID = CBUUID(string: "FFF0")
     fileprivate static let colorReciverCBUUID = CBUUID(string: "FFF3")
     
