@@ -11,40 +11,40 @@ import CoreBluetooth
 
 internal class BLEClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     
-    private static let nottiUUID = NSUUID(UUIDString: "B1C06DCE-8935-4E0D-8AED-8432F2DBC73C")
-    private static let colorServiceCBUUID = CBUUID(string: "FFF0")
-    private static let colorReciverCBUUID = CBUUID(string: "FFF3")
+    fileprivate static let nottiUUID = UUID(uuidString: "B1C06DCE-8935-4E0D-8AED-8432F2DBC73C")    
+    fileprivate static let colorServiceCBUUID = CBUUID(string: "FFF0")
+    fileprivate static let colorReciverCBUUID = CBUUID(string: "FFF3")
     
     let centralManager: CBCentralManager
     
     override init() {
-        centralManager = CBCentralManager(delegate: nil, queue: dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0))
+        centralManager = CBCentralManager(delegate: nil, queue: DispatchQueue.global())
         super.init()
         centralManager.delegate = self
     }
     
     // MARK: -
     
-    private var timeout: dispatch_time_t { return dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC*10)) }
+    fileprivate var timeout: DispatchTime { return DispatchTime.now() + Double(Int64(NSEC_PER_SEC*10)) / Double(NSEC_PER_SEC) }
     
     func poweredOn() -> Bool {
-        if centralManager.state == .PoweredOn { return true }
+        if centralManager.state == .poweredOn { return true }
         
-        let semaphore = dispatch_semaphore_create(0)
+        let semaphore = DispatchSemaphore(value: 0)
         poweredOnHandler = { [weak self] in
             self?.poweredOnHandler = nil
-            dispatch_semaphore_signal(semaphore)
+            semaphore.signal()
         }
-        dispatch_semaphore_wait(semaphore, timeout)
+        if case .timedOut = semaphore.wait(timeout: timeout) { return false }
         
-        return centralManager.state == .PoweredOn
+        return centralManager.state == .poweredOn
     }
-    private var poweredOnHandler: (() -> Void)?
+    fileprivate var poweredOnHandler: (() -> Void)?
     
     var findNotti: CBPeripheral? {
         let cbUUID = BLEClient.colorServiceCBUUID
         
-        if let notti = centralManager.retrieveConnectedPeripheralsWithServices([cbUUID]).first {
+        if let notti = centralManager.retrieveConnectedPeripherals(withServices: [cbUUID]).first {
             if verbose { print("Retrive peripheral. {\n\tnotti: \(notti)\n}") }
             notti.delegate = self
             return notti
@@ -52,151 +52,157 @@ internal class BLEClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelega
         
         var notti: CBPeripheral?
         
-        let semaphore = dispatch_semaphore_create(0)
+        let semaphore = DispatchSemaphore(value: 0)
         findNottiHandler = { [weak self] (peripheral: CBPeripheral) in
             if peripheral.identifier == BLEClient.nottiUUID {
                 if verbose { print("Found notti. {\n\tnotti: \(peripheral)\n}") }
                 notti = peripheral
                 self?.findNottiHandler = nil
-                dispatch_semaphore_signal(semaphore)
+                semaphore.signal()
             }
         }
-        centralManager.scanForPeripheralsWithServices([cbUUID], options: nil)
-        dispatch_semaphore_wait(semaphore, timeout)
-        centralManager.stopScan()
+        centralManager.scanForPeripherals(withServices: [cbUUID], options: nil)
+        defer { centralManager.stopScan() }
+        
+        if case .timedOut = semaphore.wait(timeout: timeout) { return nil }
         
         notti?.delegate = self
         return notti
     }
-    private var findNottiHandler: ((peripheral: CBPeripheral) -> Void)?
+    fileprivate var findNottiHandler: ((_ peripheral: CBPeripheral) -> Void)?
     
-    func connect(peripheral: CBPeripheral) -> Bool {
-        if peripheral.state == .Connected { return true }
+    func connect(_ peripheral: CBPeripheral) -> Bool {
+        if peripheral.state == .connected { return true }
         
-        let semaphore = dispatch_semaphore_create(0)
+        let semaphore = DispatchSemaphore(value: 0)
         connectHandler = { [weak self] in
             self?.connectHandler = nil
-            dispatch_semaphore_signal(semaphore)
+            semaphore.signal()
         }
-        centralManager.connectPeripheral(peripheral, options: nil)
-        dispatch_semaphore_wait(semaphore, timeout)
+        centralManager.connect(peripheral, options: nil)
         
-        return peripheral.state == .Connected
+        if case .timedOut = semaphore.wait(timeout: timeout) { return false }
+        
+        return peripheral.state == .connected
     }
-    private var connectHandler: (() -> Void)?
+    fileprivate var connectHandler: (() -> Void)?
     
-    func discoverColorService(notti: CBPeripheral) -> CBService? {
+    func discoverColorService(_ notti: CBPeripheral) -> CBService? {
         let cbUUID = BLEClient.colorServiceCBUUID
         
-        if let service = notti.services?.first where service.UUID == cbUUID {
+        if let service = notti.services?.first, service.uuid == cbUUID {
             return service
         }
         
-        let semaphore = dispatch_semaphore_create(0)
+        let semaphore = DispatchSemaphore(value: 0)
         discoverColorServiceHandler = { [weak self] in
             self?.discoverColorServiceHandler = nil
-            dispatch_semaphore_signal(semaphore)
+            semaphore.signal()
         }
         notti.discoverServices([cbUUID])
-        dispatch_semaphore_wait(semaphore, timeout)
+        
+        if case .timedOut = semaphore.wait(timeout: timeout) { return nil }
         
         let service = notti.services?.first
-        return service?.UUID == cbUUID ? service : nil
+        return service?.uuid == cbUUID ? service : nil
     }
-    private var discoverColorServiceHandler: (() -> Void)?
+    fileprivate var discoverColorServiceHandler: (() -> Void)?
     
-    func discoverReciverCharacteristic(notti: CBPeripheral, colorService: CBService) -> CBCharacteristic? {
+    func discoverReciverCharacteristic(_ notti: CBPeripheral, colorService: CBService) -> CBCharacteristic? {
         let cbUUID = BLEClient.colorReciverCBUUID
         
-        if let reciver = colorService.characteristics?.first where reciver.UUID == cbUUID {
+        if let reciver = colorService.characteristics?.first, reciver.uuid == cbUUID {
             return reciver
         }
         
-        let semaphore = dispatch_semaphore_create(0)
+        let semaphore = DispatchSemaphore(value: 0)
         discoverReciverCharacteristicHandler = { [weak self] in
             self?.discoverReciverCharacteristicHandler = nil
-            dispatch_semaphore_signal(semaphore)
+            semaphore.signal()
         }
-        notti.discoverCharacteristics([cbUUID], forService: colorService)
-        dispatch_semaphore_wait(semaphore, timeout)
+        notti.discoverCharacteristics([cbUUID], for: colorService)
+        
+        if case .timedOut = semaphore.wait(timeout: timeout) { return nil }
         
         let reciver = colorService.characteristics?.first
-        return reciver?.UUID == cbUUID ? reciver : nil
+        return reciver?.uuid == cbUUID ? reciver : nil
     }
-    private var discoverReciverCharacteristicHandler: (() -> Void)?
+    fileprivate var discoverReciverCharacteristicHandler: (() -> Void)?
     
-    func write(notti: CBPeripheral, reciver: CBCharacteristic, data: NSData) -> Bool {
+    func write(_ notti: CBPeripheral, reciver: CBCharacteristic, data: Data) -> Bool {
         var success = false
         
-        let semaphore = dispatch_semaphore_create(0)
+        let semaphore = DispatchSemaphore(value: 0)
         writeHandler = { [weak self] (error: NSError?) in
             success = error == nil
             self?.writeHandler = nil
-            dispatch_semaphore_signal(semaphore)
+            semaphore.signal()
         }
-        notti.writeValue(data, forCharacteristic: reciver, type: .WithResponse)
-        dispatch_semaphore_wait(semaphore, timeout)
+        notti.writeValue(data, for: reciver, type: .withResponse)
+        
+        if case .timedOut = semaphore.wait(timeout: timeout) { return false }
         
         return success
     }
-    private var writeHandler: ((error: NSError?) -> Void)?
+    fileprivate var writeHandler: ((_ error: NSError?) -> Void)?
     
-    func disconnect(notti: CBPeripheral) -> Bool {
+    func disconnect(_ notti: CBPeripheral) -> Bool {
         var success = false
         
-        let semaphore = dispatch_semaphore_create(0)
+        let semaphore = DispatchSemaphore(value: 0)
         disconnectHandler = { [weak self] (error: NSError?) in
             success = error == nil
             self?.disconnectHandler = nil
-            dispatch_semaphore_signal(semaphore)
+            semaphore.signal()
         }
         centralManager.cancelPeripheralConnection(notti)
-        dispatch_semaphore_wait(semaphore, timeout)
+        
+        if case .timedOut = semaphore.wait(timeout: timeout) { return false }
         
         return success
     }
-    private var disconnectHandler: ((error: NSError?) -> Void)?
+    fileprivate var disconnectHandler: ((_ error: NSError?) -> Void)?
     
     // MARK: - CBCentralManagerDelegate
     
-    internal func centralManagerDidUpdateState(central: CBCentralManager) {
-        if verbose { print("Did change state. {\n\tcentral.state: \(central.state.rawValue)\n}") }
+    internal func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        if verbose { print("\(#function) {\n\tcentral.state: \(central.state.rawValue)\n}") }
         poweredOnHandler?()
     }
     
-    func centralManager(central: CBCentralManager, didDiscoverPeripheral peripheral: CBPeripheral, advertisementData: [String : AnyObject], RSSI: NSNumber) {
-        if verbose { print("Did discover peripheral. {\n\tperipheral: \(peripheral)\n}") }
-        findNottiHandler?(peripheral: peripheral)
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        if verbose { print("\(#function) {\n\tperipheral: \(peripheral)\n}") }
+        findNottiHandler?(peripheral)
     }
     
-    func centralManager(central: CBCentralManager, didConnectPeripheral peripheral: CBPeripheral) {
-        if verbose { print("Did connect peripheral. {\n\tperipheral: \(peripheral)\n}") }
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        if verbose { print("\(#function) {\n\tperipheral: \(peripheral)\n}") }
         connectHandler?()
     }
     
-    internal func centralManager(central: CBCentralManager, didFailToConnectPeripheral peripheral: CBPeripheral, error: NSError?) {
-        print("Did fail to connect peripehral. {\n\tperipheral: \(peripheral)\n\terror: \(error)\n}")
+    internal func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        print("\(#function) {\n\tperipheral: \(peripheral)\n\terror: \(String(describing: error))\n}")
     }
     
-    internal func centralManager(central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: NSError?) {
-        if verbose { print("Did disconnect peripheral. {\n\tperipheral: \(peripheral)\n\terror: \(error)\n}") }
-        disconnectHandler?(error: error)
+    internal func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        if verbose { print("\(#function) {\n\tperipheral: \(peripheral)\n\terror: \(String(describing: error))\n}") }
+        disconnectHandler?(error as NSError?)
     }
     
     // MARK: - CBPeripheralDelegate
     
-    func peripheral(peripheral: CBPeripheral, didDiscoverServices error: NSError?) {
-        if verbose { print("Did discover peripheral. {\n\tperipheral: \(peripheral)\n}") }
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        if verbose { print("\(#function) {\n\tperipheral: \(peripheral)\n}") }
         discoverColorServiceHandler?()
     }
     
-    internal func peripheral(peripheral: CBPeripheral, didDiscoverCharacteristicsForService service: CBService, error: NSError?) {
-        if verbose { print("Did discover characteristics. {\n\tservice: \(service)\n\tservice.characteristics: \(service.characteristics)\n\terror: \(error)\n}") }
+    internal func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        if verbose { print("\(#function) {\n\tservice: \(service)\n\tservice.characteristics: \(String(describing: service.characteristics))\n\terror: \(String(describing: error))\n}") }
         discoverReciverCharacteristicHandler?()
     }
     
-    internal func peripheral(peripheral: CBPeripheral, didWriteValueForCharacteristic characteristic: CBCharacteristic, error: NSError?) {
-        if verbose { print("Did wirte characteristic. {\n\tcharacteristic: \(characteristic)\n\terror: \(error)\n}") }
-        writeHandler?(error: error)
+    internal func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        if verbose { print("Did wirte characteristic. {\n\tcharacteristic: \(characteristic)\n\terror: \(String(describing: error))\n}") }
+        writeHandler?(error as NSError?)
     }
 }

@@ -9,7 +9,7 @@
 import Foundation
 import CoreBluetooth
 
-let arguments = Process.arguments.suffixFrom(1)
+let arguments = CommandLine.arguments.suffix(from: 1)
 let verbose = arguments.contains("-v") || arguments.contains("--verbose")
 
 if verbose { print("arguments: \(arguments)") }

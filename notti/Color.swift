@@ -17,17 +17,17 @@ internal struct Color {
         guard let argument = argument else { return }
         
         var hex: UInt32 = 0
-        if !NSScanner(string: argument).scanHexInt(&hex) { return }
+        if !Scanner(string: argument).scanHexInt32(&hex) { return }
         
         red = UInt8(hex >> 16)
         green = UInt8((hex >> 8) & 0xff)
         blue = UInt8(hex & 0xff)
     }
     
-    var data: NSData {
+    var data: Data {
         let bytes: [UInt8] = [0x06, 0x01, red, green, blue]
         if verbose { print("Create bytes. {\n\tbytes: \(bytes)\n}") }
-        return NSData(bytes: bytes,
-                      length: bytes.count)
+        return Data(bytes: UnsafePointer<UInt8>(bytes),
+                      count: bytes.count)
     }
 }
